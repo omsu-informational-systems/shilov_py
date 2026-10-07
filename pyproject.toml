@@ -1,0 +1,20 @@
+[project]
+name = "is-shilov-py"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Hakerhakb11",email = "igorshilov2007@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "fastapi (>=0.142.2,<0.143.0)",
+    "uvicorn (>=0.54.0,<0.55.0)",
+    "pydantic (>=2.13.5,<3.0.0)",
+    "python-dotenv (>=1.2.4,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
