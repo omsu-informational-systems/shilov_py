@@ -4,17 +4,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.config import AppConfig
-from src.modules.strategy.adapters.kafka_worker import (
-    InMemoryDeduplicationStore,
-    KafkaAdapter,
-)
-from src.modules.strategy.application.process_candle import ProcessCandleUseCase
+from src.modules.strategy.adapters.kafka_worker import KafkaAdapter
+from src.modules.strategy.adapters.state_store import InMemoryStateRepository
+from src.modules.strategy.application.use_cases import ProcessCandleUseCase
 
 config = AppConfig.from_env()
+state_repo = InMemoryStateRepository()
 kafka_adapter = KafkaAdapter(config)
-dedup_store = InMemoryDeduplicationStore()
 process_candle_uc = ProcessCandleUseCase(
-    publisher=kafka_adapter, dedup_store=dedup_store
+    publisher=kafka_adapter,
+    state_repo=state_repo,
+    window_size=5,
 )
 
 worker_thread: threading.Thread | None = None
@@ -29,10 +29,7 @@ async def lifespan(app: FastAPI):
         daemon=True,
     )
     worker_thread.start()
-
     yield
-
-    # Корректное завершение: сигнализируем циклу остановиться и ждем закрытия консьюмеров
     kafka_adapter.stop_event.set()
     if worker_thread and worker_thread.is_alive():
         worker_thread.join(timeout=10)
@@ -43,16 +40,16 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health_check():
-    is_up = kafka_adapter.status == "UP"
-    kafka_component = {"status": "UP" if is_up else "DOWN"}
+    broker_up = kafka_adapter.status == "UP"
+    broker_comp = {"status": "UP" if broker_up else "DOWN"}
     if kafka_adapter.error_details:
-        kafka_component["details"] = kafka_adapter.error_details
+        broker_comp["details"] = kafka_adapter.error_details
 
     return {
-        "status": "UP" if is_up else "DEGRADED",
+        "status": "UP" if broker_up else "DEGRADED",
         "service": config.service_name,
         "version": config.app_version,
         "components": {
-            "kafka": kafka_component,
+            "messageBroker": broker_comp,
         },
     }
