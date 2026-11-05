@@ -15,6 +15,11 @@ from ..core.entities import (
     MessageEnvelope,
     RegistrationResultPayload,
 )
+from ..core.validators import (
+    MessageValidationError,
+    validate_candle_payload,
+    validate_envelope_structure,
+)
 from ..ports.interfaces import CandleHandlerPort
 
 logger = logging.getLogger("strategy.consumer")
@@ -225,12 +230,44 @@ class KafkaConsumerAdapter:
                             f"Ошибка чтения свечей: {msg.error().code()}"
                         )
 
-                    event = json.loads(msg.value())
+                    try:
+                        event = json.loads(msg.value())
+                    except Exception as json_err:  # noqa: BLE001
+                        logger.warning(
+                            "event=malformed_json_skipped error=%s", json_err
+                        )
+                        candle_consumer.commit(message=msg, asynchronous=False)
+                        continue
+
+                    try:
+                        validate_envelope_structure(event)
+                    except MessageValidationError as val_err:
+                        logger.warning(
+                            'event=envelope_validation_failed error="%s" raw="%s"',
+                            val_err,
+                            str(event)[:150],
+                        )
+                        candle_consumer.commit(message=msg, asynchronous=False)
+                        continue
+
                     if event.get("eventType") == "market.candle.closed":
-                        candle_payload = CandleClosedPayload.from_dict(event["payload"])
+                        try:
+                            candle_payload = CandleClosedPayload.from_dict(
+                                event["payload"]
+                            )
+                            candle_payload = validate_candle_payload(event["payload"])
+                        except MessageValidationError as payload_err:
+                            logger.warning(
+                                'event=candle_payload_validation_failed eventId=%s error="%s"',
+                                event.get("eventId"),
+                                payload_err,
+                            )
+                            candle_consumer.commit(message=msg, asynchronous=False)
+                            continue
+
                         self.candle_handler.handle_candle(
                             event_id=event["eventId"],
-                            correlation_id=event.get("correlationId", ""),
+                            correlation_id=event.get("correlationId", event["eventId"]),
                             candle=candle_payload,
                         )
 
