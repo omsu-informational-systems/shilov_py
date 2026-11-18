@@ -42,9 +42,9 @@ async def lifespan(app: FastAPI):
 
     logger.info("Остановка сервиса...")
     consumer_adapter.stop_event.set()
-    producer_adapter.close()
     if worker_thread and worker_thread.is_alive():
         worker_thread.join(timeout=5)
+    producer_adapter.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -52,13 +52,13 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health_check():
-    is_up = consumer_adapter.status == "UP"
-    broker_info = {"status": "UP" if is_up else "DOWN"}
+    broker_status = "UP" if consumer_adapter.status == "UP" else "DOWN"
+    broker_info: dict[str, str] = {"status": broker_status}
     if consumer_adapter.error_details:
         broker_info["details"] = consumer_adapter.error_details
 
     return {
-        "status": "UP" if is_up else "DEGRADED",
+        "status": "UP",
         "service": config.service_name,
         "version": config.app_version,
         "components": {

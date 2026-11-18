@@ -10,9 +10,13 @@
 Сервис предназначен для автоматического совершения сделок на платформе с использованием импульсной стратегии.
 
 ## Требования к окружению
-- Установленный Docker
+- Установленный Docker c docker-compose.
 
 1. **Сборка Docker-образа:**
    Находясь в корневой папке репозитория, выполните команду:
    ```bash
-   docker run -d -p 8000:8000 --env-file .env --name momentum-bot momentum-service
+   docker compose up -d --build
+
+2. **Корректное завершение**
+   ```bash
+   docker compose down
